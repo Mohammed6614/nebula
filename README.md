@@ -149,15 +149,6 @@ nebula/
 └── README.md
 ```
 
-## 🔑 الحسابات الافتراضية
-
-- **Admin**: admin@nebula.sa / Admin@Nebula2024!
-- **Supervisor**: supervisor@nebula.sa / Supervisor@Nebula2024!
-
-## 📄 التراخيص
-
-MIT License - حرية الاستخدام والتعديل.
 
 ---
 
-**تم إنشاء هذا المشروع بواسطة Cascade** 🚀
