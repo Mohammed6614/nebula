@@ -1,0 +1,679 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ===========================================
+// ENUMS
+// ===========================================
+
+enum UserRole {
+  ADMIN
+  SUPERVISOR
+  MERCHANT
+  AFFILIATE
+  CUSTOMER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PAST_DUE
+  PENDING
+  TRIAL
+}
+
+enum SubscriptionPlan {
+  BASIC
+  PRO
+  ENTERPRISE
+  AFFILIATE
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PAYPAL
+  TABBY
+  TAMARA
+  MADA
+  CASH_ON_DELIVERY
+}
+
+enum PaymentType {
+  SUBSCRIPTION
+  ORDER
+  REFUND
+}
+
+enum NotificationType {
+  EMAIL
+  IN_APP
+  BOTH
+}
+
+// ===========================================
+// CORE TABLES
+// ===========================================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  phone     String?
+  avatar    String?
+  
+  role      UserRole @default(CUSTOMER)
+  status    UserStatus @default(PENDING_VERIFICATION)
+  
+  isEmailVerified    Boolean @default(false)
+  emailVerifiedAt    DateTime?
+  
+  hasCompletedOnboarding Boolean @default(false)
+  onboardingStep String?
+  
+  // Multi-tenant reference
+  tenantId  String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLoginAt DateTime?
+  
+  // Relations
+  store           Store?
+  affiliate       Affiliate?
+  customerOrders  Order[]         @relation("CustomerOrders")
+  subscriptions   Subscription[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  
+  // Authentication
+  refreshTokens   RefreshToken[]
+  passwordResets  PasswordReset[]
+  emailVerifications EmailVerification[]
+  
+  @@index([email])
+  @@index([role])
+  @@index([tenantId])
+  @@index([status])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model EmailVerification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([token])
+  @@map("email_verifications")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([token])
+  @@map("password_resets")
+}
+
+// ===========================================
+// STORE SYSTEM
+// ===========================================
+
+model Store {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String?
+  
+  // Branding
+  logo        String?
+  coverImage  String?
+  primaryColor String   @default("#6366f1")
+  secondaryColor String @default("#8b5cf6")
+  
+  // Contact
+  email       String
+  phone       String?
+  address     String?
+  city        String?
+  country     String   @default("SA")
+  
+  // Settings
+  isActive    Boolean  @default(true)
+  isVerified  Boolean  @default(false)
+  
+  // Multi-tenant
+  tenantId    String   @unique
+  
+  // Relations
+  ownerId     String   @unique
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  products    Product[]
+  orders      Order[]
+  categories  Category[]
+  paymentSettings MerchantPaymentSettings?
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([slug])
+  @@index([tenantId])
+  @@index([ownerId])
+  @@index([isActive])
+  @@map("stores")
+}
+
+// ===========================================
+// PRODUCT SYSTEM
+// ===========================================
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String
+  description String?
+  image       String?
+  isActive    Boolean  @default(true)
+  
+  // Multi-tenant
+  tenantId    String
+  
+  // Relations
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  products    Product[]
+  
+  parentId    String?
+  parent      Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([storeId, slug])
+  @@index([storeId])
+  @@index([tenantId])
+  @@map("categories")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String
+  description String   @db.Text
+  sku         String?
+  
+  // Pricing
+  price       Decimal  @db.Decimal(10, 2)
+  compareAtPrice Decimal? @db.Decimal(10, 2)
+  costPerItem Decimal? @db.Decimal(10, 2)
+  
+  // Inventory
+  inventoryQuantity Int    @default(0)
+  inventoryTracked  Boolean @default(true)
+  lowStockThreshold Int?    @default(5)
+  
+  // Status
+  status      String   @default("DRAFT") // DRAFT, ACTIVE, ARCHIVED
+  isActive    Boolean  @default(false)
+  
+  // Media
+  images      ProductImage[]
+  
+  // SEO
+  seoTitle    String?
+  seoDescription String?
+  
+  // Multi-tenant
+  tenantId    String
+  
+  // Relations
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  
+  variants    ProductVariant[]
+  orderItems  OrderItem[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([storeId, slug])
+  @@index([storeId])
+  @@index([tenantId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([isActive])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  url       String
+  alt       String?
+  position  Int      @default(0)
+  
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@index([productId])
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id          String   @id @default(uuid())
+  title       String
+  sku         String?
+  price       Decimal  @db.Decimal(10, 2)
+  compareAtPrice Decimal? @db.Decimal(10, 2)
+  inventoryQuantity Int   @default(0)
+  
+  // Options (JSON for flexibility)
+  options     Json?
+  
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([productId])
+  @@map("product_variants")
+}
+
+// ===========================================
+// ORDER SYSTEM
+// ===========================================
+
+model Order {
+  id          String   @id @default(uuid())
+  orderNumber String   @unique
+  
+  // Status
+  status      OrderStatus @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING)
+  
+  // Financial
+  subtotal    Decimal  @db.Decimal(10, 2)
+  taxAmount   Decimal  @db.Decimal(10, 2)
+  shippingAmount Decimal @db.Decimal(10, 2) @default(0)
+  discountAmount Decimal @db.Decimal(10, 2) @default(0)
+  total       Decimal  @db.Decimal(10, 2)
+  currency    String   @default("SAR")
+  
+  // Payment
+  paymentMethod PaymentMethod?
+  paymentTransactionId String?
+  
+  // QR Verification
+  qrCode      String?
+  qrVerified  Boolean  @default(false)
+  qrVerifiedAt DateTime?
+  
+  // Shipping
+  shippingAddress Json
+  shippingCity    String
+  shippingCountry String @default("SA")
+  
+  // Multi-tenant
+  tenantId    String
+  
+  // Relations
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  customerId  String
+  customer    User     @relation("CustomerOrders", fields: [customerId], references: [id])
+  
+  items       OrderItem[]
+  
+  // Affiliate tracking (no commission, just tracking)
+  affiliateId String?
+  affiliate   Affiliate? @relation(fields: [affiliateId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([storeId])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([affiliateId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  totalPrice  Decimal  @db.Decimal(10, 2)
+  
+  // Product snapshot
+  productName String
+  productImage String?
+  variantTitle String?
+  
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+// ===========================================
+// SUBSCRIPTION SYSTEM (CORE BUSINESS MODEL)
+// ===========================================
+
+model Subscription {
+  id          String   @id @default(uuid())
+  
+  // Plan details
+  plan        SubscriptionPlan
+  status      SubscriptionStatus @default(PENDING)
+  
+  // Pricing
+  price       Decimal  @db.Decimal(10, 2)
+  currency    String   @default("SAR")
+  
+  // First month discount
+  isFirstMonthDiscount Boolean @default(true)
+  discountPercentage Int?    @default(50)
+  regularPrice Decimal  @db.Decimal(10, 2)
+  
+  // PayPal integration
+  paypalSubscriptionId String? @unique
+  paypalPlanId         String?
+  
+  // Billing periods
+  currentPeriodStart  DateTime
+  currentPeriodEnd    DateTime
+  nextBillingDate     DateTime?
+  
+  // Status tracking
+  startedAt           DateTime?
+  cancelledAt         DateTime?
+  expiresAt           DateTime?
+  cancellationReason  String?
+  
+  // Relations
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  payments    Payment[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+  @@index([paypalSubscriptionId])
+  @@index([nextBillingDate])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id          String   @id @default(uuid())
+  
+  type        PaymentType
+  status      PaymentStatus @default(PENDING)
+  
+  amount      Decimal  @db.Decimal(10, 2)
+  currency    String   @default("SAR")
+  
+  // Gateway info
+  gateway     PaymentMethod
+  gatewayTransactionId String?
+  gatewayResponse Json?
+  
+  // For subscriptions
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  
+  // For orders
+  orderId     String?
+  
+  // Metadata
+  metadata    Json?
+  errorMessage String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([subscriptionId])
+  @@index([gatewayTransactionId])
+  @@index([status])
+  @@map("payments")
+}
+
+// ===========================================
+// AFFILIATE SYSTEM (Referral tracking only - NO COMMISSIONS)
+// ===========================================
+
+model Affiliate {
+  id          String   @id @default(uuid())
+  
+  // Referral code
+  referralCode String  @unique
+  
+  // Tracking
+  totalClicks      Int @default(0)
+  totalOrders      Int @default(0)
+  
+  // Analytics
+  lastClickAt      DateTime?
+  
+  // Relations
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  clicks    AffiliateClick[]
+  orders    Order[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([referralCode])
+  @@map("affiliates")
+}
+
+model AffiliateClick {
+  id          String   @id @default(uuid())
+  
+  // Tracking info
+  ipAddress   String?
+  userAgent   String?
+  referrer    String?
+  
+  // UTM parameters
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  
+  // Converted to order
+  converted   Boolean  @default(false)
+  orderId     String?
+  
+  affiliateId String
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([affiliateId])
+  @@index([createdAt])
+  @@map("affiliate_clicks")
+}
+
+// ===========================================
+// PAYMENT SETTINGS
+// ===========================================
+
+model MerchantPaymentSettings {
+  id          String   @id @default(uuid())
+  
+  // Enabled gateways
+  paypalEnabled    Boolean @default(false)
+  paypalEmail      String?
+  paypalMerchantId String?
+  
+  tabbyEnabled     Boolean @default(false)
+  tabbyPublicKey   String?
+  tabbySecretKey   String?
+  
+  tamaraEnabled    Boolean @default(false)
+  tamaraApiKey     String?
+  tamaraApiSecret  String?
+  
+  madaEnabled      Boolean @default(false)
+  madaEntityId     String?
+  madaAuthorization String?
+  
+  // Cash on delivery
+  codEnabled       Boolean @default(true)
+  
+  // Relations
+  storeId          String   @unique
+  store            Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  @@map("merchant_payment_settings")
+}
+
+// ===========================================
+// NOTIFICATION SYSTEM
+// ===========================================
+
+model Notification {
+  id          String   @id @default(uuid())
+  
+  title       String
+  message     String
+  type        String   // order, subscription, system, etc.
+  
+  // Delivery
+  emailSent   Boolean  @default(false)
+  emailSentAt DateTime?
+  inAppRead   Boolean  @default(false)
+  inAppReadAt DateTime?
+  
+  // Data
+  data        Json?
+  
+  // Relations
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@index([inAppRead])
+  @@map("notifications")
+}
+
+// ===========================================
+// AUDIT LOGS
+// ===========================================
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, etc.
+  entity      String   // user, order, product, etc.
+  entityId    String?
+  
+  // Details
+  oldValues   Json?
+  newValues   Json?
+  ipAddress   String?
+  userAgent   String?
+  
+  // Relations
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  // Multi-tenant
+  tenantId    String?
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([tenantId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
