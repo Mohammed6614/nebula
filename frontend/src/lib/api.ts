@@ -219,34 +219,134 @@ export const affiliateApi = {
 };
 
 export const adminApi = {
-  // Dashboard Stats
+  // ===========================================
+  // GLOBAL OVERVIEW DASHBOARD
+  // ===========================================
   getDashboardStats: () => api.get('/admin/dashboard-stats'),
+  getRevenueAnalytics: (params?: { period?: number }) =>
+    api.get('/admin/revenue-analytics', { params }),
+  getGrowthMetrics: (params?: { period?: number }) =>
+    api.get('/admin/growth-metrics', { params }),
+  getRecentActivity: (params?: { limit?: number }) =>
+    api.get('/admin/recent-activity', { params }),
 
-  // User Management
-  getUsers: (params?: Record<string, unknown>) =>
+  // ===========================================
+  // USER MANAGEMENT
+  // ===========================================
+  getUsers: (params?: { page?: number; limit?: number; search?: string; role?: string; status?: string }) =>
     api.get('/admin/users', { params }),
+  getUserById: (userId: string) =>
+    api.get(`/admin/users/${userId}`),
   updateUser: (userId: string, data: Record<string, unknown>) =>
     api.patch(`/admin/users/${userId}`, data),
+  deleteUser: (userId: string) =>
+    api.delete(`/admin/users/${userId}`),
+  getUserActivityLogs: (userId: string, params?: { page?: number; limit?: number }) =>
+    api.get(`/admin/users/${userId}/activity-logs`, { params }),
 
-  // Store Management
-  getStores: (params?: Record<string, unknown>) =>
+  // ===========================================
+  // STORE MANAGEMENT
+  // ===========================================
+  getStores: (params?: { page?: number; limit?: number; search?: string; isActive?: boolean; status?: string }) =>
     api.get('/admin/stores', { params }),
+  getStoreById: (storeId: string) =>
+    api.get(`/admin/stores/${storeId}`),
   toggleStoreStatus: (storeId: string) =>
     api.patch(`/admin/stores/${storeId}/toggle-status`),
   deleteStore: (storeId: string) =>
     api.delete(`/admin/stores/${storeId}`),
+  getStoreHealth: (storeId: string) =>
+    api.get(`/admin/stores/${storeId}/health`),
 
-  // Subscription Management
-  getSubscriptions: (params?: Record<string, unknown>) =>
+  // ===========================================
+  // SUBSCRIPTION MANAGEMENT
+  // ===========================================
+  getSubscriptions: (params?: { page?: number; limit?: number; status?: string; plan?: string }) =>
     api.get('/admin/subscriptions', { params }),
+  getSubscriptionById: (subscriptionId: string) =>
+    api.get(`/admin/subscriptions/${subscriptionId}`),
+  cancelSubscription: (subscriptionId: string, data?: { reason?: string }) =>
+    api.patch(`/admin/subscriptions/${subscriptionId}/cancel`, data),
 
-  // Analytics
+  // ===========================================
+  // PAYMENTS & TRANSACTIONS
+  // ===========================================
+  getPayments: (params?: { page?: number; limit?: number; status?: string; type?: string; gateway?: string }) =>
+    api.get('/admin/payments', { params }),
+  getPaymentById: (paymentId: string) =>
+    api.get(`/admin/payments/${paymentId}`),
+
+  // ===========================================
+  // ANALYTICS & BUSINESS INTELLIGENCE
+  // ===========================================
   getAnalytics: (params?: Record<string, unknown>) =>
     api.get('/admin/analytics', { params }),
+  exportAnalyticsReport: (params?: { format?: string; startDate?: string; endDate?: string }) =>
+    api.get('/admin/analytics/export', { params }),
 
-  // Audit Logs
-  getAuditLogs: (params?: Record<string, unknown>) =>
+  // ===========================================
+  // SECURITY CENTER
+  // ===========================================
+  getSecurityEvents: (params?: { page?: number; limit?: number; type?: string; severity?: string }) =>
+    api.get('/admin/security-events', { params }),
+  getBlockedIPs: () =>
+    api.get('/admin/security/blocked-ips'),
+  blockIP: (data: { ip: string; reason?: string }) =>
+    api.post('/admin/security/block-ip', data),
+  unblockIP: (ip: string) =>
+    api.delete(`/admin/security/block-ip/${ip}`),
+
+  // ===========================================
+  // AUDIT LOGS
+  // ===========================================
+  getAuditLogs: (params?: { page?: number; limit?: number; userId?: string; action?: string; entity?: string }) =>
     api.get('/admin/audit-logs', { params }),
+
+  // ===========================================
+  // NOTIFICATIONS
+  // ===========================================
+  getAdminNotifications: (params?: { unreadOnly?: boolean }) =>
+    api.get('/admin/notifications', { params }),
+  markNotificationAsRead: (notificationId: string) =>
+    api.patch(`/admin/notifications/${notificationId}/read`),
+  markAllNotificationsAsRead: () =>
+    api.patch('/admin/notifications/read-all'),
+
+  // ===========================================
+  // SUPPORT & TICKETING SYSTEM
+  // ===========================================
+  getSupportTickets: (params?: { page?: number; limit?: number; status?: string; priority?: string; category?: string }) =>
+    api.get('/admin/support-tickets', { params }),
+  getSupportTicketById: (ticketId: string) =>
+    api.get(`/admin/support-tickets/${ticketId}`),
+  updateSupportTicket: (ticketId: string, data: Record<string, unknown>) =>
+    api.patch(`/admin/support-tickets/${ticketId}`, data),
+  replyToSupportTicket: (ticketId: string, data: { reply: string }) =>
+    api.post(`/admin/support-tickets/${ticketId}/reply`, data),
+  closeSupportTicket: (ticketId: string) =>
+    api.patch(`/admin/support-tickets/${ticketId}/close`),
+
+  // ===========================================
+  // PLATFORM SETTINGS
+  // ===========================================
+  getPlatformSettings: () =>
+    api.get('/admin/settings'),
+  updatePlatformSetting: (key: string, data: { value: any }) =>
+    api.patch(`/admin/settings/${key}`, data),
+
+  // ===========================================
+  // FEATURE FLAGS
+  // ===========================================
+  getFeatureFlags: () =>
+    api.get('/admin/feature-flags'),
+  createFeatureFlag: (data: { name: string; description?: string; enabled?: boolean; plan?: string; rollout?: number }) =>
+    api.post('/admin/feature-flags', data),
+  updateFeatureFlag: (flagId: string, data: Record<string, unknown>) =>
+    api.patch(`/admin/feature-flags/${flagId}`, data),
+  deleteFeatureFlag: (flagId: string) =>
+    api.delete(`/admin/feature-flags/${flagId}`),
+  checkFeatureFlag: (name: string) =>
+    api.get(`/admin/feature-flags/${name}/check`),
 };
 
 export const supervisorApi = {

@@ -80,8 +80,8 @@ const envSchema = z.object({
   FIRST_MONTH_DISCOUNT_PERCENTAGE: z.string().transform(Number).default('50'),
 
   // Admin Accounts
-  ADMIN_EMAIL: z.string().email().optional().default('admin@nebula.sa'),
-  ADMIN_PASSWORD: z.string().min(8).optional().default('AdminPassword123'),
+  ADMIN_EMAIL: z.string().email().optional().default('fatora1h@gmail.com'),
+  ADMIN_PASSWORD: z.string().min(8).optional().default('Mubarak@1403'),
   SUPERVISOR_EMAIL: z.string().email().optional().default('supervisor@nebula.sa'),
   SUPERVISOR_PASSWORD: z.string().min(8).optional().default('SupervisorPass123'),
 });

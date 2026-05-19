@@ -19,8 +19,8 @@ async function seed() {
         data: {
           email: env.ADMIN_EMAIL,
           password: adminPassword,
-          firstName: 'System',
-          lastName: 'Administrator',
+          firstName: 'Fatora',
+          lastName: 'Admin',
           role: 'ADMIN',
           status: 'ACTIVE',
           isEmailVerified: true,

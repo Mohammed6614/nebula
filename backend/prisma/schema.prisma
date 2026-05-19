@@ -118,6 +118,8 @@ model User {
   subscriptions   Subscription[]
   notifications   Notification[]
   auditLogs       AuditLog[]
+  supportTickets  SupportTicket[]
+  adminTickets    SupportTicket[] @relation("AdminTickets")
   
   // Authentication
   refreshTokens   RefreshToken[]
@@ -676,4 +678,80 @@ model AuditLog {
   @@index([tenantId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ===========================================
+// SUPPORT TICKETING SYSTEM
+// ===========================================
+
+model SupportTicket {
+  id          String   @id @default(uuid())
+  
+  // Ticket details
+  subject     String
+  description String   @db.Text
+  category    String   // billing, technical, feature_request, other
+  priority    String   @default("medium") // low, medium, high, urgent
+  status      String   @default("open") // open, in_progress, resolved, closed
+  
+  // User who created the ticket
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Admin response
+  adminId     String?
+  admin       User?    @relation("AdminTickets", fields: [adminId], references: [id])
+  adminReply  String?  @db.Text
+  
+  // Resolution
+  resolvedAt  DateTime?
+  closedAt    DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([adminId])
+  @@index([status])
+  @@index([priority])
+  @@index([category])
+  @@index([createdAt])
+  @@map("support_tickets")
+}
+
+// ===========================================
+// PLATFORM SETTINGS
+// ===========================================
+
+model PlatformSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  category  String   // pricing, email, payment, general
+  updatedAt DateTime @updatedAt
+  
+  @@index([key])
+  @@index([category])
+  @@map("platform_settings")
+}
+
+// ===========================================
+// FEATURE FLAGS
+// ===========================================
+
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  enabled     Boolean  @default(false)
+  plan        String?  // BASIC, PRO, ENTERPRISE, AFFILIATE - if null, applies to all
+  rollout     Float    @default(0) // 0-1 percentage for gradual rollout
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([name])
+  @@index([enabled])
+  @@index([plan])
+  @@map("feature_flags")
 }
